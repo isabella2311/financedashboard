@@ -1,7 +1,3 @@
-app.py
-db.py
-models.py
-requirements.txt
 import os, datetime as dt, pandas as pd, streamlit as st, plotly.express as px
 from db import init_db, SessionLocal
 from models import Transaction, Budget, Goal, Debt, Investment, Account
@@ -11,7 +7,6 @@ import bcrypt
 st.set_page_config(page_title="Finance Dashboard", page_icon="💼", layout="wide")
 init_db()
 
-# --- Auth (demo) ---
 # --- Auth (prod via env) ---
 email = os.environ.get("FINANCE_EMAIL", "admin@example.com")
 name = os.environ.get("FINANCE_NAME", "Admin")
@@ -39,10 +34,13 @@ def get_session():
 
 def df_transactions(sess, start=None, end=None):
     q = sess.query(Transaction)
-    if start: q = q.filter(Transaction.date >= start)
-    if end: q = q.filter(Transaction.date <= end)
+    if start:
+        q = q.filter(Transaction.date >= start)
+    if end:
+        q = q.filter(Transaction.date <= end)
     rows = q.all()
-    if not rows: return pd.DataFrame(columns=["id","date","type","category","account","amount","description","tags"])
+    if not rows:
+        return pd.DataFrame(columns=["id", "date", "type", "category", "account", "amount", "description", "tags"])
     data = [{
         "id": r.id,
         "date": r.date,
@@ -58,16 +56,17 @@ def df_transactions(sess, start=None, end=None):
 def upsert_transaction(sess, row):
     if row.get("id"):
         t = sess.query(Transaction).get(int(row["id"]))
-        if not t: return
+        if not t:
+            return
     else:
         t = Transaction()
     t.date = pd.to_datetime(row["date"]).date()
     t.type = row["type"]
     t.category = row["category"]
-    t.account = row.get("account","Principal")
+    t.account = row.get("account", "Principal")
     t.amount = float(row["amount"])
-    t.description = row.get("description","")
-    t.tags = row.get("tags","")
+    t.description = row.get("description", "")
+    t.tags = row.get("tags", "")
     sess.add(t)
     sess.commit()
 
@@ -101,25 +100,24 @@ with tab1:
         df = df[df["tags"].str.contains(tag_filter, case=False, na=False)]
 
     c1, c2, c3, c4 = st.columns(4)
-    income = df.loc[df["type"]=="income", "amount"].sum()
-    expense = df.loc[df["type"]=="expense", "amount"].sum()
+    income = df.loc[df["type"] == "income", "amount"].sum()
+    expense = df.loc[df["type"] == "expense", "amount"].sum()
     balance = income - expense
-    avg_spend = df.loc[df["type"]=="expense", "amount"].mean() if not df[df["type"]=="expense"].empty else 0
+    avg_spend = df.loc[df["type"] == "expense", "amount"].mean() if not df[df["type"] == "expense"].empty else 0
     c1.metric("Ingresos", f"{income:,.2f}")
     c2.metric("Gastos", f"{expense:,.2f}")
     c3.metric("Balance", f"{balance:,.2f}")
     c4.metric("Gasto promedio", f"{avg_spend:,.2f}")
 
-    # monthly flow
     if not df.empty:
         dfm = df.copy()
         dfm["month"] = pd.to_datetime(dfm["date"]).dt.to_period("M").astype(str)
         flow = dfm.pivot_table(index="month", columns="type", values="amount", aggfunc="sum").fillna(0)
         flow = flow.reset_index()
-        fig = px.bar(flow, x="month", y=["income","expense"], barmode="group", title="Flujo mensual")
+        fig = px.bar(flow, x="month", y=["income", "expense"], barmode="group", title="Flujo mensual")
         st.plotly_chart(fig, use_container_width=True)
 
-        by_cat = df[df["type"]=="expense"].groupby("category")["amount"].sum().sort_values(ascending=False).reset_index()
+        by_cat = df[df["type"] == "expense"].groupby("category")["amount"].sum().sort_values(ascending=False).reset_index()
         if not by_cat.empty:
             fig2 = px.pie(by_cat, names="category", values="amount", title="Gasto por categoría")
             st.plotly_chart(fig2, use_container_width=True)
@@ -132,10 +130,9 @@ with tab2:
 
     st.markdown("### Añadir / Editar")
     with st.form("trx_form", clear_on_submit=True):
-        cols = st.columns(4)
         id_edit = st.text_input("ID (solo para editar)", "")
         date = st.date_input("Fecha", dt.date.today())
-        type_ = st.selectbox("Tipo", ["income","expense"])
+        type_ = st.selectbox("Tipo", ["income", "expense"])
         category = st.text_input("Categoría", "General")
         account = st.text_input("Cuenta", "Principal")
         amount = st.number_input("Monto", step=0.01, format="%.2f")
@@ -154,28 +151,27 @@ with tab2:
                 "tags": tags,
             })
             st.success("Transacción guardada. Actualiza la vista desde el menú Rerun.")
+
     st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        del_id = st.text_input("ID a borrar", "")
-        if st.button("Borrar"):
-            if del_id.strip():
-                delete_transaction(sess, del_id.strip())
-                st.warning("Transacción eliminada.")
-    with c2:
-        st.markdown("**Exportar CSV**")
-        df = df_transactions(sess)
-        st.download_button("Descargar transacciones", df.to_csv(index=False).encode("utf-8"), "transacciones.csv", "text/csv")
-    with c3:
-        st.markdown("**Importar CSV** (campos: date,type,category,account,amount,description,tags)")
-        up = st.file_uploader("Sube CSV", type=["csv"])
-        if up is not None:
-            try:
-                imp = pd.read_csv(up)
-                cnt = 0
-                for _, r in imp.iterrows():
-                    upsert_transaction(sess, r.to_dict())
-                    cnt += 1
-                st.success(f"Importadas {cnt} transacciones.")
-            except Exception as e:
-                st.error(f"Error al importar: {e}")
+    del_id = st.text_input("ID a borrar", "")
+    if st.button("Borrar"):
+        if del_id.strip():
+            delete_transaction(sess, del_id.strip())
+            st.warning("Transacción eliminada.")
+
+    st.markdown("**Exportar CSV**")
+    df = df_transactions(sess)
+    st.download_button("Descargar transacciones", df.to_csv(index=False).encode("utf-8"), "transacciones.csv", "text/csv")
+
+    st.markdown("**Importar CSV** (campos: date,type,category,account,amount,description,tags)")
+    up = st.file_uploader("Sube CSV", type=["csv"])
+    if up is not None:
+        try:
+            imp = pd.read_csv(up)
+            cnt = 0
+            for _, r in imp.iterrows():
+                upsert_transaction(sess, r.to_dict())
+                cnt += 1
+            st.success(f"Importadas {cnt} transacciones.")
+        except Exception as e:
+            st.error(f"Error al importar: {e}")
