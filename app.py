@@ -1,3 +1,9 @@
+app.py
+db.py
+models.py
+requirements.txt
+.streamlit/config.toml
+pages/   (todas las páginas dentro)
 import os, datetime as dt, pandas as pd, streamlit as st, plotly.express as px
 from db import init_db, SessionLocal
 from models import Transaction, Budget, Goal, Debt, Investment, Account
